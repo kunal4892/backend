@@ -1,0 +1,28 @@
+{
+  "name": "ai-chat-backend",
+  "version": "1.0.0",
+  "description": "Supabase Edge Functions for AI Chat App with Gemini integration",
+  "main": "index.js",
+  "scripts": {
+    "dev": "supabase functions serve",
+    "deploy": "supabase functions deploy",
+    "deploy:all": "supabase functions deploy --no-verify-jwt",
+    "logs": "supabase functions logs",
+    "test": "deno test --allow-net --allow-env",
+    "format": "deno fmt",
+    "lint": "deno lint"
+  },
+  "keywords": [
+    "supabase",
+    "edge-functions",
+    "ai-chat",
+    "gemini",
+    "deno",
+    "typescript"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "deno": ">=1.40.0"
+  }
+}

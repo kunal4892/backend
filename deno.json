@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 80,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": true,
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "include": ["**/*.ts"],
+    "exclude": ["**/node_modules/**"]
+  },
+  "tasks": {
+    "dev": "supabase functions serve",
+    "deploy": "supabase functions deploy",
+    "logs": "supabase functions logs",
+    "test": "deno test --allow-net --allow-env",
+    "format": "deno fmt",
+    "lint": "deno lint"
+  }
+}
