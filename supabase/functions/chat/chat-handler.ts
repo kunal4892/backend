@@ -1,27 +1,93 @@
 // supabase/functions/chat-handler/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as jose from "https://deno.land/x/jose@v4.14.4/index.ts";
+
 // ✅ Supabase + Gemini setup
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const JWT_SECRET = Deno.env.get("JWT_SECRET");
 const supabase = createClient(supabaseUrl, supabaseKey);
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+
+console.log("=== chat-handler: Environment check ===");
+console.log("SUPABASE_URL exists:", !!supabaseUrl);
+console.log("SERVICE_ROLE_KEY exists:", !!supabaseKey);
+console.log("JWT_SECRET exists:", !!JWT_SECRET);
+console.log("GEMINI_API_KEY exists:", !!GEMINI_API_KEY);
+
+if (!supabaseUrl || !supabaseKey || !JWT_SECRET || !GEMINI_API_KEY) {
+  throw new Error("Missing required environment variables");
+}
+
 // ✅ Use lightweight + fast model
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
 const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
 /* -------------------------------------------------------------------------- */ /*                                Main Handler                                */ /* -------------------------------------------------------------------------- */ serve(async (req)=>{
+  console.log("=== chat-handler: Request received ===");
+  console.log("Method:", req.method);
+  console.log("URL:", req.url);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
       headers: cors()
     });
   }
+  
   try {
+    // --- 1️⃣ Extract JWT from Authorization header ---
+    const authHeader = req.headers.get("Authorization");
+    console.log("Auth header present:", !!authHeader);
+    
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ Missing or invalid Authorization header");
+      return json({
+        error: "Missing or invalid Authorization header"
+      }, 401);
+    }
+    
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) {
+      console.log("❌ Empty token");
+      return json({
+        error: "Empty token"
+      }, 401);
+    }
+    
+    // --- 2️⃣ Verify and decode JWT ---
+    let phone;
+    try {
+      const decoded = await jose.jwtVerify(token, new TextEncoder().encode(JWT_SECRET));
+      phone = decoded.payload.phone;
+      console.log("✅ JWT verified, phone:", phone);
+    } catch (err) {
+      console.error("❌ JWT verify failed:", err);
+      return json({
+        error: "Invalid or expired token"
+      }, 401);
+    }
+    
+    if (!phone) {
+      console.log("❌ No phone found in token");
+      return json({
+        error: "No phone found in token"
+      }, 400);
+    }
+    
+    // --- 3️⃣ Parse body for persona and message ---
     const body = await req.json();
-    const { phone, personaId, text } = body;
-    if (!phone || !personaId || !text) return json({
-      error: "Missing phone, personaId, or text"
-    }, 400);
+    console.log("Request body:", body);
+    
+    const { personaId, text } = body;
+    if (!personaId || !text) {
+      console.log("❌ Missing personaId or text");
+      return json({
+        error: "Missing personaId or text"
+      }, 400);
+    }
+    
+    console.log("Processing chat for phone:", phone, "personaId:", personaId);
     const startTime = Date.now();
     /* ---------------------------------------------------------------------- */ /*                     Parallel thread + persona fetch                    */ /* ---------------------------------------------------------------------- */ const [{ thread }, { persona }] = await Promise.all([
       getOrCreateThread(phone, personaId),
@@ -182,20 +248,42 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
   }
 });
 /* -------------------------------------------------------------------------- */ /*                             Helper functions                               */ /* -------------------------------------------------------------------------- */ async function getOrCreateThread(phone, personaId) {
-  let { data: thread, error } = await supabase.from("threads").select("*").eq("phone", phone).eq("persona_id", personaId).single();
-  if (error || !thread) {
-    const res = await supabase.from("threads").insert({
-      phone,
-      persona_id: personaId,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }).select().single();
-    if (res.error) throw res.error;
-    thread = res.data;
+  console.log("Getting or creating thread for phone:", phone, "personaId:", personaId);
+  
+  // First try to find existing thread
+  const { data: thread, error } = await supabase
+    .from("threads")
+    .select("*")
+    .eq("phone", phone)
+    .eq("persona_id", personaId)
+    .maybeSingle();
+  
+  if (error) {
+    console.error("❌ Error fetching thread:", error);
+    throw error;
   }
-  return {
-    thread
-  };
+  
+  if (thread) {
+    console.log("✅ Found existing thread:", thread.id);
+    return { thread };
+  }
+  
+  // Create new thread if not found
+  console.log("Creating new thread for phone:", phone, "personaId:", personaId);
+  const res = await supabase.from("threads").insert({
+    phone,
+    persona_id: personaId,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }).select().single();
+  
+  if (res.error) {
+    console.error("❌ Error creating thread:", res.error);
+    throw res.error;
+  }
+  
+  console.log("✅ Created new thread:", res.data.id);
+  return { thread: res.data };
 }
 async function getPersona(personaId) {
   const { data, error } = await supabase.from("personas").select("*").eq("id", personaId).single();
