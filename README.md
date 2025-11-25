@@ -99,21 +99,57 @@ FCM_PRIVATE_KEY=your_firebase_private_key
 
 ## 🚀 Deployment
 
+The `deploy.sh` script supports flexible deployment options:
+
 ### Deploy All Functions
 ```bash
-npm run deploy:all
+./deploy.sh
+# or
+./deploy.sh all
+```
+
+### Deploy by Category
+```bash
+./deploy.sh auth          # Deploy only auth functions
+./deploy.sh chat          # Deploy only chat functions
+./deploy.sh personas      # Deploy only persona functions
+./deploy.sh notifications # Deploy only notification functions
 ```
 
 ### Deploy Individual Functions
 ```bash
-supabase functions deploy register
-supabase functions deploy get-personas
-supabase functions deploy chat-handler
+./deploy.sh persona-manager    # Deploy just persona-manager
+./deploy.sh chat-handler       # Deploy just chat-handler
+./deploy.sh register           # Deploy just register
 # ... etc
+```
+
+### Available Functions
+**Auth Functions:**
+- `register` - User registration
+- `reissue-api-key` - Token refresh
+
+**Chat Functions:**
+- `chat-handler` - Main chat processor
+- `get_messages` - Message retrieval
+
+**Persona Functions:**
+- `get-personas` - Persona listing
+- `persona-manager` - Context builder
+
+**Notification Functions:**
+- `summarize-and-notify` - Push notifications
+- `thread-summarizer` - Thread summaries
+
+### Show All Options
+```bash
+./deploy.sh help
 ```
 
 ### Development
 ```bash
+supabase functions serve
+# or
 npm run dev
 ```
 

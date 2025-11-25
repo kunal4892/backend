@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { verifyToken } from "../utils/authMiddleware.ts";
+import { verifyAndRefreshToken } from "../utils/authMiddleware.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const JWT_SECRET = Deno.env.get("JWT_SECRET");
@@ -42,8 +42,11 @@ serve(async (req)=>{
     
     let authResult;
     try {
-      authResult = await verifyToken(authHeader);
+      authResult = await verifyAndRefreshToken(authHeader);
       console.log("✅ Auth successful, phone:", authResult.phone);
+      if (authResult.wasRefreshed) {
+        console.log("🔄 Token was refreshed");
+      }
     } catch (authError: any) {
       console.error("❌ Auth failed:", authError.message);
       return new Response(JSON.stringify({
@@ -134,11 +137,16 @@ serve(async (req)=>{
     
     console.log("Messages found:", messages?.length || 0);
     
-    // --- 6️⃣ Return both thread info + messages ---
+    // --- 6️⃣ Return both thread info + messages (+ new token if refreshed) ---
     const response: any = {
       thread,
       messages: messages || []
     };
+    
+    if (authResult.wasRefreshed) {
+      response.new_token = authResult.newToken;
+      console.log("🔄 Including new token in response");
+    }
     
     return new Response(JSON.stringify(response), {
       status: 200,

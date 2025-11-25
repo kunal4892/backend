@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { verifyToken } from "../utils/authMiddleware.ts";
+import { verifyAndRefreshToken } from "../utils/authMiddleware.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const JWT_SECRET = Deno.env.get("JWT_SECRET");
@@ -41,8 +41,11 @@ serve(async (req)=>{
     
     let authResult;
     try {
-      authResult = await verifyToken(authHeader);
+      authResult = await verifyAndRefreshToken(authHeader);
       console.log("✅ BACKEND: Auth successful, phone:", authResult.phone);
+      if (authResult.wasRefreshed) {
+        console.log("🔄 Token was refreshed, will return new token to client");
+      }
     } catch (authError: any) {
       console.error("❌ BACKEND: Auth failed:", authError.message);
       return new Response(JSON.stringify({
@@ -97,8 +100,12 @@ serve(async (req)=>{
     console.log("\n=== BACKEND: RESPONSE ===");
     console.log("DEBUG: Returning data length:", data ? data.length : 0);
     
-    // Build response
+    // Build response - include new token if it was refreshed
     const response: any = { data };
+    if (authResult.wasRefreshed) {
+      response.new_token = authResult.newToken;
+      console.log("🔄 Including new token in response");
+    }
     
     return new Response(JSON.stringify(response), {
       status: 200,

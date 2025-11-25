@@ -90,14 +90,14 @@ serve(async (req) => {
       );
     }
 
-    // Generate new JWT with 10 hour expiration
+    // Generate new JWT with 7 day expiration
     const newToken = await new jose.SignJWT({
       user_id: user.id,
       phone: user.phone,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
-      .setExpirationTime("1d")
+      .setExpirationTime("7d")
       .sign(new TextEncoder().encode(JWT_SECRET));
 
     console.log("✅ Issued new token for phone:", phone);

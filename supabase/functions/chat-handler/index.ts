@@ -198,7 +198,7 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
       }
     }
     if (!chosenReply) {
-      const fallback = "Hmm, thoda confuse ho gaya main 😅 &&& Phir se try karein? Ya kuch aur baat karein?";
+      const fallback = "⚠️ Gemini didn’t respond or filtered this message.";
       await insertBotBubble(thread.id, fallback);
       return json({
         threadId: thread.id,
