@@ -68,7 +68,13 @@ async function importPrivateKeyPem(pemString) {
   }
 }
 serve(async (req)=>{
+  console.log("\n=== BACKEND: REGISTER REQUEST START ===");
+  console.log("DEBUG: Request method:", req.method);
+  console.log("DEBUG: Request URL:", req.url);
+  console.log("DEBUG: Request headers:", Object.fromEntries(req.headers.entries()));
+  
   if (req.method === "OPTIONS") {
+    console.log("DEBUG: Handling OPTIONS preflight");
     return new Response(null, {
       status: 204,
       headers: cors()
@@ -78,7 +84,11 @@ serve(async (req)=>{
   // Ensure we always return JSON, even for parsing errors
   let body;
   try {
-    body = await req.json();
+    const bodyText = await req.text();
+    console.log("DEBUG: Raw request body length:", bodyText.length);
+    console.log("DEBUG: Raw request body preview (first 200 chars):", bodyText.substring(0, 200));
+    body = JSON.parse(bodyText);
+    console.log("✅ BACKEND: Successfully parsed JSON body");
   } catch (parseError: any) {
     console.error("❌ BACKEND: Failed to parse request body as JSON:", parseError.message);
     return new Response(JSON.stringify({
@@ -95,6 +105,15 @@ serve(async (req)=>{
   try {
     console.log("\n=== BACKEND: REGISTER REQUEST RECEIVED ===");
     console.log("DEBUG: Received body keys:", Object.keys(body));
+    console.log("DEBUG: Full body structure:", JSON.stringify({
+      hasEncryptedKey: !!body.encrypted_key,
+      hasIv: !!body.iv,
+      hasPayload: !!body.payload,
+      hasPhone: !!body.phone,
+      encryptedKeyLength: body.encrypted_key?.length || 0,
+      ivLength: body.iv?.length || 0,
+      payloadLength: body.payload?.length || 0
+    }));
     
     // Support both encrypted (mobile) and simple (web) registration
     let phone: string;
@@ -106,6 +125,13 @@ serve(async (req)=>{
     if (body.phone) {
       // Simple web registration - no encryption needed
       console.log("DEBUG: Simple web registration detected");
+      console.log("DEBUG: Web registration data:", {
+        phone: body.phone,
+        hasGender: !!body.gender,
+        hasAge: !!body.age,
+        hasCity: !!(body.city || body.location),
+        hasFcmToken: !!body.fcm_token
+      });
       phone = body.phone;
       fcm_token = body.fcm_token;
       gender = body.gender;
@@ -115,6 +141,14 @@ serve(async (req)=>{
       // Encrypted mobile registration
       const { encrypted_key, iv, payload } = body;
       console.log("DEBUG: Encrypted mobile registration detected");
+      console.log("DEBUG: Encrypted data validation:", {
+        hasEncryptedKey: !!encrypted_key,
+        hasIv: !!iv,
+        hasPayload: !!payload,
+        encryptedKeyType: typeof encrypted_key,
+        ivType: typeof iv,
+        payloadType: typeof payload
+      });
       console.log("DEBUG: Received encrypted_key length:", encrypted_key?.length);
       console.log("DEBUG: Received encrypted_key (first 50 base64):", encrypted_key?.substring(0, 50));
       console.log("DEBUG: Received iv length:", iv?.length);
@@ -202,8 +236,26 @@ serve(async (req)=>{
       console.log("\n=== BACKEND: DECRYPTED PLAINTEXT ===");
       console.log("DEBUG: Decrypted plaintext length:", plaintext.length);
       console.log("DEBUG: Decrypted plaintext (full):", plaintext);
-      const obj = JSON.parse(plaintext);
-      console.log("DEBUG: Parsed JSON keys:", Object.keys(obj));
+      
+      let obj;
+      try {
+        obj = JSON.parse(plaintext);
+        console.log("✅ BACKEND: Successfully parsed decrypted JSON");
+        console.log("DEBUG: Parsed JSON keys:", Object.keys(obj));
+        console.log("DEBUG: Parsed JSON values:", {
+          hasPhone: !!obj.phone,
+          phone: obj.phone,
+          hasFcmToken: !!obj.fcm_token,
+          hasGender: !!obj.gender,
+          hasAge: !!obj.age,
+          hasCity: !!obj.city
+        });
+      } catch (parseErr: any) {
+        console.error("❌ BACKEND: Failed to parse decrypted plaintext as JSON:", parseErr.message);
+        console.error("DEBUG: Plaintext that failed to parse:", plaintext);
+        throw new Error(`Failed to parse decrypted data: ${parseErr.message}`);
+      }
+      
       phone = obj.phone;
       fcm_token = obj.fcm_token;
       gender = obj.gender;
@@ -211,17 +263,56 @@ serve(async (req)=>{
       city = obj.city;
     }
     
-    if (!phone) throw new Error("Phone number is required");
+    console.log("\n=== BACKEND: FINAL REGISTRATION DATA ===");
+    console.log("DEBUG: Final phone:", phone);
+    console.log("DEBUG: Final data:", {
+      phone: phone,
+      hasGender: !!gender,
+      gender: gender,
+      hasAge: !!age,
+      age: age,
+      hasCity: !!city,
+      city: city,
+      hasFcmToken: !!fcm_token,
+      fcmTokenPreview: fcm_token ? `${fcm_token.substring(0, 20)}...` : "null"
+    });
+    
+    if (!phone) {
+      console.error("❌ BACKEND: Phone number is missing after processing");
+      throw new Error("Phone number is required");
+    }
+    // Normalize phone number: ensure it's a string, trim whitespace
+    const normalizedPhone = String(phone).trim();
     console.log("\n=== BACKEND: USER REGISTRATION ===");
     console.log("DEBUG: Registering user:", {
-      phone,
+      phone: normalizedPhone,
+      phoneType: typeof normalizedPhone,
+      phoneLength: normalizedPhone.length,
       gender,
       age,
       city,
       fcm_token: fcm_token ? `${fcm_token.substring(0, 20)}...` : "null" // Truncate for logs
     });
+    
+    // Check if user already exists before upsert
+    const { data: existingUser } = await supabase
+      .from("users")
+      .select("phone, idx, created_at")
+      .eq("phone", normalizedPhone)
+      .maybeSingle();
+    
+    if (existingUser) {
+      console.log("⚠️ BACKEND: User already exists:", {
+        phone: existingUser.phone,
+        idx: existingUser.idx,
+        created_at: existingUser.created_at
+      });
+    } else {
+      console.log("✅ BACKEND: New user - will create new entry");
+    }
+    
     const { data: user, error } = await supabase.from("users").upsert({
-      phone,
+      phone: normalizedPhone,
       gender,
       age,
       location: city,
@@ -229,17 +320,83 @@ serve(async (req)=>{
     }, {
       onConflict: "phone"
     }).select("*").single();
-    if (error) throw error;
-    const app_key = await new jose.SignJWT({
-      phone: user.phone
-    }).setProtectedHeader({
-      alg: "HS256"
-    }).setIssuedAt().setExpirationTime("7d").sign(new TextEncoder().encode(JWT_SECRET));
-    console.log("✅ BACKEND: Registration complete. User ID:", user.id);
-    return new Response(JSON.stringify({
+    
+    if (error) {
+      console.error("❌ BACKEND: Upsert error:", error);
+      console.error("❌ BACKEND: Upsert error details:", JSON.stringify(error, null, 2));
+      throw error;
+    }
+    
+    if (!user) {
+      console.error("❌ BACKEND: Upsert returned no user data");
+      throw new Error("Failed to create/update user - no data returned");
+    }
+    
+    if (!user.phone) {
+      console.error("❌ BACKEND: User object missing phone:", JSON.stringify(user));
+      throw new Error("User created but phone is missing");
+    }
+    
+    // Verify phone number matches (check for duplicates)
+    const { data: duplicateCheck } = await supabase
+      .from("users")
+      .select("phone, idx")
+      .eq("phone", normalizedPhone);
+    
+    if (duplicateCheck && duplicateCheck.length > 1) {
+      console.error("🚨 BACKEND: DUPLICATE DETECTED! Found", duplicateCheck.length, "entries for phone:", normalizedPhone);
+      console.error("🚨 BACKEND: Duplicate entries:", JSON.stringify(duplicateCheck, null, 2));
+    } else {
+      console.log("✅ BACKEND: No duplicates found - phone is unique");
+    }
+    
+    console.log("✅ BACKEND: Upsert successful. User data:", {
+      phone: user.phone,
+      hasGender: !!user.gender,
+      hasAge: !!user.age,
+      hasLocation: !!user.location,
+      hasFcmToken: !!user.fcm_token
+    });
+    
+    console.log("\n=== BACKEND: TOKEN GENERATION ===");
+    console.log("DEBUG: JWT_SECRET exists:", !!JWT_SECRET);
+    console.log("DEBUG: JWT_SECRET length:", JWT_SECRET ? JWT_SECRET.length : 0);
+    console.log("DEBUG: Token payload will be:", { phone: user.phone });
+    
+    let app_key;
+    try {
+      app_key = await new jose.SignJWT({
+        phone: user.phone
+      }).setProtectedHeader({
+        alg: "HS256"
+      }).setIssuedAt().setExpirationTime("30s").sign(new TextEncoder().encode(JWT_SECRET));
+      console.log("✅ BACKEND: Token generated successfully");
+      console.log("DEBUG: Token length:", app_key.length);
+      console.log("DEBUG: Token preview (first 50):", app_key.substring(0, 50) + "...");
+      console.log("DEBUG: Token preview (last 50):", "..." + app_key.substring(app_key.length - 50));
+    } catch (tokenError: any) {
+      console.error("❌ BACKEND: Token generation failed:", tokenError.message);
+      console.error("DEBUG: Token error stack:", tokenError.stack);
+      throw new Error(`Token generation failed: ${tokenError.message}`);
+    }
+    
+    console.log("\n=== BACKEND: RESPONSE PREPARATION ===");
+    const responseBody = {
       success: true,
-      app_key
-    }), {
+      app_key,
+      phone: user.phone
+    };
+    console.log("DEBUG: Response body keys:", Object.keys(responseBody));
+    console.log("DEBUG: Response success:", responseBody.success);
+    console.log("DEBUG: Response app_key exists:", !!responseBody.app_key);
+    console.log("DEBUG: Response app_key length:", responseBody.app_key?.length || 0);
+    console.log("DEBUG: Response phone exists:", !!responseBody.phone);
+    console.log("DEBUG: Response phone:", responseBody.phone);
+    
+    console.log("✅ BACKEND: Registration complete. Phone:", user.phone);
+    console.log("✅ BACKEND: Sending 200 response with token and phone");
+    
+    return new Response(JSON.stringify(responseBody), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
@@ -248,7 +405,9 @@ serve(async (req)=>{
     });
   } catch (e: any) {
     console.error("\n❌ BACKEND: Register error:", e.message);
+    console.error("DEBUG: Error type:", e.name);
     console.error("DEBUG: Full error stack:", e.stack);
+    console.error("DEBUG: Error occurred at:", new Date().toISOString());
     
     // Ensure we ALWAYS return JSON, never HTML
     const errorResponse = {
@@ -256,6 +415,9 @@ serve(async (req)=>{
       // Include error type for debugging (but don't expose sensitive details)
       errorType: e.name || "UnknownError"
     };
+    
+    console.log("DEBUG: Error response:", JSON.stringify(errorResponse));
+    console.log("DEBUG: Returning 500 status");
     
     return new Response(JSON.stringify(errorResponse), {
       status: 500,

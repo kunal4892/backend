@@ -1,7 +1,7 @@
 // supabase/functions/chat-handler/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { verifyToken } from "./utils/authMiddleware.ts";
+import { verifyToken } from "../utils/authMiddleware.ts";
 import { buildPersonaContext } from "./utils/personaUtils.ts";
 
 // ✅ Supabase + Gemini setup
@@ -45,7 +45,7 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     
     let authResult;
     try {
-      authResult = await verifyToken(authHeader);
+      authResult = await verifyAndRefreshToken(authHeader, req);
     } catch (authError: any) {
       console.error("❌ Auth failed:", authError.message);
       return json({ error: authError.message }, 401);
@@ -53,6 +53,9 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     
     const tAuth = Date.now();
     console.log(`⏱️ Auth (fast): ${tAuth - t0}ms`);
+    if (authResult.wasRefreshed) {
+      console.log("🔄 Token was refreshed, will return new token to client");
+    }
     
     const phone = authResult.phone;
     
@@ -234,12 +237,18 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     const totalTime = t6 - t0;
     console.log(`⚡ TOTAL: ${totalTime}ms (Auth→Persona: ${t1-t0}ms | History: ${t2-t1}ms | Gemini: ${t4-t3}ms | DB: ${t6-t5}ms)`);
     
-    // Build response (no token refresh in fast path)
+    // Build response
     const response: any = {
       threadId: thread.id,
       replies: bubbles,
       messages: botMessages
     };
+    
+    // Include new token if it was refreshed
+    if (authResult.wasRefreshed && authResult.newToken) {
+      response.new_token = authResult.newToken;
+      console.log("🔄 Including new token in response");
+    }
     
     return json(response);
   } catch (err) {

@@ -1,7 +1,7 @@
 // supabase/functions/chat-handler/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { verifyToken } from "./utils/authMiddleware.ts";
+import { verifyAndRefreshToken } from "../utils/authMiddleware.ts";
 import { buildPersonaContext } from "./utils/personaUtils.ts";
 
 // ✅ Supabase + Gemini setup
@@ -45,7 +45,7 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     
     let authResult;
     try {
-      authResult = await verifyToken(authHeader);
+      authResult = await verifyAndRefreshToken(authHeader, req);
     } catch (authError: any) {
       console.error("❌ Auth failed:", authError.message);
       return json({ error: authError.message }, 401);
@@ -53,6 +53,9 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     
     const tAuth = Date.now();
     console.log(`⏱️ Auth (fast): ${tAuth - t0}ms`);
+    if (authResult.wasRefreshed) {
+      console.log("🔄 Token was refreshed, will return new token to client");
+    }
     
     const phone = authResult.phone;
     
@@ -119,7 +122,7 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
       generationConfig: {
         candidateCount: 2,  // Get 2 candidates for variety
         temperature: 0.9,
-        maxOutputTokens: 1000  // Limit response length (faster)
+        maxOutputTokens: 2048  // Increased to prevent MAX_TOKENS truncation
       }
     };
     
@@ -152,6 +155,21 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     
     const raw = await r.text();
     console.log("📄 Gemini raw response:", raw.slice(0, 1000));
+    
+    // Check if Gemini returned an error
+    if (!r.ok) {
+      console.error("❌ Gemini API error - Status:", r.status);
+      console.error("❌ Gemini API error - Response:", raw);
+      let errorMessage = `Gemini API error (${r.status})`;
+      try {
+        const errorData = JSON.parse(raw);
+        errorMessage = errorData?.error?.message || errorData?.message || errorMessage;
+        console.error("❌ Gemini error details:", JSON.stringify(errorData, null, 2));
+      } catch (e) {
+        console.error("❌ Could not parse Gemini error response");
+      }
+      throw new Error(errorMessage);
+    }
     
     let data = {};
     try {
@@ -197,8 +215,37 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
         }
       }
     }
+    
+    // Check if response was cut off due to MAX_TOKENS
+    if (!chosenReply && candidates.length > 0) {
+      const firstCandidate = candidates[0];
+      const finishReason = firstCandidate?.finishReason;
+      
+      if (finishReason === "MAX_TOKENS") {
+        // Funky message for token limit
+        const funkyMessages = [
+          "Arre yaar, maine itna bol diya ki system ne cut kar diya! 😅 Baat adhuri reh gayi, phir se try karo?",
+          "Oops! Main itna excited ho gaya ki response limit cross ho gaya 😂 Dobara bolo, abhi short mein reply dunga!",
+          "Haha, maine itna bolna chaha ki token limit hit ho gayi! 🎉 Chalo, ek aur try?",
+          "Arre wah! Itna lamba reply banaya ki system ne cut button dab diya 😜 Chhoti baat karo, main bhi chhota reply dunga!",
+          "System ne kaha: Bhai, itna mat bol! 😂 Token limit hit ho gayi. Dobara try?",
+          "Main itna bol gaya ki response ka size limit cross ho gaya! 🚀 Chalo, phir se shuru karte hain?",
+          "Oops! Response itna lamba ho gaya ki system ne pause button dab diya 😅 Short mein bolo, main bhi short reply dunga!"
+        ];
+        const funkyMessage = funkyMessages[Math.floor(Math.random() * funkyMessages.length)];
+        await insertBotBubble(thread.id, funkyMessage);
+        return json({
+          threadId: thread.id,
+          replies: [
+            funkyMessage
+          ],
+          messages: []
+        });
+      }
+    }
+    
     if (!chosenReply) {
-      const fallback = "⚠️ Gemini didn’t respond or filtered this message.";
+      const fallback = "⚠️ Gemini didn't respond or filtered this message.";
       await insertBotBubble(thread.id, fallback);
       return json({
         threadId: thread.id,
@@ -240,6 +287,12 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
       replies: bubbles,
       messages: botMessages
     };
+    
+    // Include new token if it was refreshed
+    if (authResult.wasRefreshed && authResult.newToken) {
+      response.new_token = authResult.newToken;
+      console.log("🔄 Including new token in response");
+    }
     
     return json(response);
   } catch (err) {

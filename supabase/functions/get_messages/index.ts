@@ -42,7 +42,7 @@ serve(async (req)=>{
     
     let authResult;
     try {
-      authResult = await verifyAndRefreshToken(authHeader);
+      authResult = await verifyAndRefreshToken(authHeader, req);
       console.log("✅ Auth successful, phone:", authResult.phone);
       if (authResult.wasRefreshed) {
         console.log("🔄 Token was refreshed");
