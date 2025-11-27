@@ -1,0 +1,15 @@
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/CMakeFiles/appmodules.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/CMakeFiles/rebuild_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnasyncstorage_autolinked_build/CMakeFiles/react_codegen_rnasyncstorage.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnasyncstorage_autolinked_build/CMakeFiles/edit_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnasyncstorage_autolinked_build/CMakeFiles/rebuild_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnpicker_autolinked_build/CMakeFiles/react_codegen_rnpicker.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnpicker_autolinked_build/CMakeFiles/edit_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnpicker_autolinked_build/CMakeFiles/rebuild_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/safeareacontext_autolinked_build/CMakeFiles/react_codegen_safeareacontext.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/safeareacontext_autolinked_build/CMakeFiles/edit_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/safeareacontext_autolinked_build/CMakeFiles/rebuild_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnscreens_autolinked_build/CMakeFiles/react_codegen_rnscreens.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnscreens_autolinked_build/CMakeFiles/edit_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/armeabi-v7a/rnscreens_autolinked_build/CMakeFiles/rebuild_cache.dir

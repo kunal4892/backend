@@ -1,0 +1,4 @@
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/foo.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/boo.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/edit_cache.dir
+/Users/kumar4892/AndroidStudioProjects/backend/frontend/android/app/.cxx/Debug/e1t333u4/x86/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/rebuild_cache.dir

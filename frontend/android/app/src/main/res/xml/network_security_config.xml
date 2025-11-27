@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext for all connections (needed for Metro bundler on emulator) -->
+    <!-- In debug builds, this works with usesCleartextTraffic="true" -->
+    <!-- In release builds, usesCleartextTraffic="false" will block cleartext -->
+    <base-config cleartextTraffic="true">
+        <trust-anchors>
+            <!-- Trust preinstalled CAs -->
+            <certificates src="system" />
+            <!-- Additionally trust user added CAs (for debugging, but also helps with some Samsung/VPN scenarios) -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

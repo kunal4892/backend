@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "212065251422",
+    "project_id": "nextrush-6c59a",
+    "storage_bucket": "nextrush-6c59a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:212065251422:android:c5028a54ce42c2513804cf",
+        "android_client_info": {
+          "package_name": "com.aifriend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrm0OsMxfLn-Qo753lc1FQA8M5RvanlZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:212065251422:android:1b407523afd1ed253804cf",
+        "android_client_info": {
+          "package_name": "com.aisi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrm0OsMxfLn-Qo753lc1FQA8M5RvanlZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:212065251422:android:c4b6a818bfbc89973804cf",
+        "android_client_info": {
+          "package_name": "com.aisiappcompanion"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrm0OsMxfLn-Qo753lc1FQA8M5RvanlZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

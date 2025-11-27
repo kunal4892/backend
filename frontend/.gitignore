@@ -1,0 +1,31 @@
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# React Native / Android build
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/local.properties
+android/.cxx/
+
+# iOS build
+ios/build/
+ios/Pods/
+ios/DerivedData/
+
+# Metro / bundler
+.expo/
+.expo-shared/
+.bundle/
+dist/
+build/
+
+# Environment & keys
+.env
+android/key.properties
+android/app/*.keystore
+*.jks
+*.keystore
