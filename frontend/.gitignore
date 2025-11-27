@@ -29,3 +29,8 @@ android/key.properties
 android/app/*.keystore
 *.jks
 *.keystore
+*.pem
+private*.pem
+public.pem
+clean.pem
+private_pkcs8.pem
