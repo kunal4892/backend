@@ -38,3 +38,8 @@ private_pkcs8.pem
 # Build artifacts
 android/app/.cxx/
 .DS_Store
+
+# Scripts and documentation (temporary files)
+*.sh
+*.md
+!README.md

@@ -36,3 +36,8 @@ Thumbs.db
 # Build outputs
 dist/
 build/
+
+# Scripts and documentation (temporary files)
+*.sh
+*.md
+!README.md
