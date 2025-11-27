@@ -34,3 +34,7 @@ private*.pem
 public.pem
 clean.pem
 private_pkcs8.pem
+
+# Build artifacts
+android/app/.cxx/
+.DS_Store

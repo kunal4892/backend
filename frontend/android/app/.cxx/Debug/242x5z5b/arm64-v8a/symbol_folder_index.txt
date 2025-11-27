@@ -1,1 +1,0 @@
-/Users/kumar4892/AndroidStudioProjects/AIFriend2/android/app/build/intermediates/cxx/Debug/242x5z5b/obj/arm64-v8a
