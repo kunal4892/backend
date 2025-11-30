@@ -8,6 +8,36 @@ const WORKER_URL = "https://oendriwadwjztxqczqlp.supabase.co/functions/v1/chat-h
 
 type Message = { role: "user" | "bot"; text: string };
 
+// Helper function to get friendly error messages - simple and clear
+function getFriendlyErrorMessage(): string {
+  const messages = [
+    "Aapke request ko process karne mein kuch technical difficulty aayi hai. Thoda wait karo, phir try karo?",
+    "We regret to inform you ki system thoda busy hai. Ek baar phir se try karo?",
+    "Aapka request successfully process nahi ho paya. Thoda wait karo, phir try karo?",
+    "Technical glitch detected. Phir se try karo?",
+    "We apologize for the inconvenience. Thoda ruk jao, phir try karo?",
+    "Request processing mein delay ho rahi hai. Ek baar phir se try karo?",
+    "System temporarily unavailable hai. Wait karo, phir try karo?",
+    "Aapke request ko handle karne mein problem aayi. Thoda wait karo?",
+    "Technical issue detected. Thoda wait karo, phir try karo?",
+    "We're experiencing some difficulties. Ek baar phir se try karo?",
+    "Request failed. Thoda ruk jao, phir try karo?",
+    "System overload detected. Thoda wait karo?",
+    "Aapka request process nahi ho paya. Phir se try karo?",
+    "Technical difficulties encountered. Thoda wait karo?",
+    "We apologize, but an error occurred. Ek baar phir se try karo?",
+    "System temporarily unavailable. Thoda wait karo, phir try karo?",
+    "Request processing delay. Thoda ruk jao?",
+    "Technical glitch detected. Phir se try karo?",
+    "We're experiencing some issues. Thoda wait karo?",
+    "Aapke request ko handle karne mein problem. Ek baar phir se try karo?",
+    "System error detected. Thoda wait karo, phir try karo?",
+    "Technical difficulty encountered. Thoda ruk jao, phir try karo?"
+  ];
+  
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
 
 /**
  * Chat with Gemini via Supabase Edge Function
@@ -52,9 +82,9 @@ export async function chatLLM(
 
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error("❌ Backend error response:", errText);
-      throw new Error(`Backend error ${res.status}: ${errText}`);
+      // Silently handle error - don't log to console
+      await res.text(); // Consume response body
+      throw new Error(getFriendlyErrorMessage());
     }
 
     const data = await res.json();
@@ -71,9 +101,15 @@ export async function chatLLM(
 
     // fallback
     return [data.reply || "⚠️ No reply"];
-  } catch (error) {
-    console.error("❌ chatLLM error:", error);
-    throw error;
+  } catch (error: any) {
+    // Silently handle error - don't log to console
+    
+    // If it's already a friendly message, throw as is
+    if (error.message && error.message.includes("thakan")) {
+      throw error;
+    }
+    
+    throw new Error(getFriendlyErrorMessage());
   }
 }
 
@@ -114,17 +150,16 @@ export async function getMessages({
     
     
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error("❌ getMessages failed:", res.status, errorText);
+      // Silently handle error - don't log to console
+      await res.text(); // Consume response body
       
       // Handle 401 - token is invalid, user needs to re-login
       if (res.status === 401) {
         // Clear invalid token
         await AsyncStorage.removeItem("app_key");
-        throw new Error("Authentication failed. Please login again.");
       }
       
-      throw new Error(`Failed to fetch messages: ${res.status}`);
+      throw new Error(getFriendlyErrorMessage());
     }
     
     const data = await res.json();
@@ -137,7 +172,7 @@ export async function getMessages({
     
     // Handle empty or malformed response
     if (!data || typeof data !== 'object') {
-      console.warn("⚠️ getMessages returned invalid data:", data);
+      // Silently handle - don't log to console
       return { threadId: null, messages: [], totalMessages: 0 };
     }
     
@@ -147,8 +182,14 @@ export async function getMessages({
       totalMessages: data.totalMessages || data.messages?.length || 0
     };
     
-  } catch (error) {
-    console.error("❌ getMessages error:", error);
-    throw error;
+  } catch (error: any) {
+    // Silently handle error - don't log to console
+    
+    // If it's already a friendly message, throw as is
+    if (error.message && error.message.includes("thakan")) {
+      throw error;
+    }
+    
+    throw new Error(getFriendlyErrorMessage());
   }
 }

@@ -90,50 +90,36 @@ const useChatStore = create<State>()(
           // Server messages have UUID IDs, local messages have numeric IDs, so we match by content
           const serverMessageMap = new Map<string, Msg>();
           mapped.forEach(m => {
-            // Key: role + text + approximate timestamp (rounded to nearest second)
-            const key = `${m.role}|${m.text.substring(0, 100)}|${Math.floor(m.ts / 1000)}`;
+            // Key: role + text + approximate timestamp (rounded to nearest 10 seconds for better matching)
+            const key = `${m.role}|${m.text.trim().substring(0, 200)}|${Math.floor(m.ts / 10000)}`;
             serverMessageMap.set(key, m);
           });
           
           // Find local messages that aren't on server yet
-          // Match by: role + text + timestamp (within 5 seconds)
+          // Match by: role + text + timestamp (within 10 seconds)
           // Note: Local messages use numeric IDs (Date.now()), server messages use UUID strings,
           // so we can't match by ID - we match by content instead
           const now = Date.now();
           const localOnlyMessages = existingChat.messages.filter((localMsg) => {
-            // SAFETY: Always keep messages sent in the last 2 minutes (might not be synced yet)
-            const messageAge = now - localMsg.ts;
-            if (messageAge < 120000) { // 2 minutes
-              // Still check if it's on server to avoid duplicates
-              const localKey = `${localMsg.role}|${localMsg.text.substring(0, 100)}|${Math.floor(localMsg.ts / 1000)}`;
-              if (serverMessageMap.has(localKey)) {
-                return false; // Found on server, don't duplicate
-              }
-              return true; // Recent and not on server - keep it
-            }
+            // Normalize text for comparison (trim and take first 200 chars)
+            const localText = localMsg.text.trim().substring(0, 200);
             
-            // For older messages, check if they're on server
-            const localKey = `${localMsg.role}|${localMsg.text.substring(0, 100)}|${Math.floor(localMsg.ts / 1000)}`;
-            
-            // Check exact match first
-            if (serverMessageMap.has(localKey)) {
-              return false; // Found on server
-            }
-            
-            // Check approximate match (within 5 seconds, same role and text)
+            // Check if this local message matches any server message
+            // Use a more lenient matching: same role, similar text, within 10 seconds
             for (const [key, serverMsg] of serverMessageMap.entries()) {
               const [role, text, tsStr] = key.split('|');
-              const serverTs = parseInt(tsStr) * 1000;
+              const serverTs = parseInt(tsStr) * 10000; // Convert back from 10-second buckets
               const timeDiff = Math.abs(localMsg.ts - serverTs);
               
+              // Match if: same role, text matches (allowing for small differences), and within 10 seconds
               if (role === localMsg.role && 
-                  text === localMsg.text.substring(0, 100) && 
-                  timeDiff < 5000) { // Within 5 seconds
-                return false; // Found on server (approximate match)
+                  text === localText && 
+                  timeDiff < 10000) { // Within 10 seconds
+                return false; // Found on server - don't keep local copy
               }
             }
             
-            // Not found on server - keep it
+            // Not found on server - keep it (might be a very recent message not yet synced)
             return true;
           });
           
@@ -238,18 +224,14 @@ const useChatStore = create<State>()(
             });
           }
         } catch (err: any) {
-          console.error("❌ sendUserMessage error:", err);
-          console.error("❌ Error details:", {
-            message: err?.message || "Unknown error",
-            stack: err?.stack,
-            personaId: chat.personaId,
-            app_key: "error occurred"
-          });
+          // Silently handle error - don't log to console
           const ts = Date.now();
+          // Use the friendly error message (already converted in api.ts)
+          const errorMessage = err.message || "Aapke request ko process karne mein kuch technical difficulty aayi hai. Thoda wait karo, phir try karo?";
           const botErr: Msg = {
             id: ts + 1,
             role: "bot",
-            text: `❌ Error: ${err.message || "Something went wrong"}`,
+            text: errorMessage,
             ts: ts + 1,
           };
           set((st) => ({

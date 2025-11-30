@@ -27,8 +27,8 @@ android {
         applicationId "com.aisiappcompanion"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
-        versionName "1.0"
+        versionCode 10
+        versionName "1.2"
 
         buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", (project.hasProperty("newArchEnabled") ? "true" : "false")
         buildConfigField "boolean", "IS_EDGE_TO_EDGE_ENABLED", "true"

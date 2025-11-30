@@ -47,8 +47,16 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     try {
       authResult = await verifyAndRefreshToken(authHeader, req);
     } catch (authError: any) {
-      console.error("❌ Auth failed:", authError.message);
-      return json({ error: authError.message }, 401);
+      // Silently handle auth error - return friendly message
+      const friendlyMessages = [
+        "Aapke request ko process karne mein kuch technical difficulty aayi hai. Thoda wait karo, phir try karo?",
+        "We regret to inform you ki system thoda busy hai. Ek baar phir se try karo?"
+      ];
+      const friendlyMessage = friendlyMessages[Math.floor(Math.random() * friendlyMessages.length)];
+      return json({ 
+        replies: [friendlyMessage],
+        messages: []
+      }, 200);
     }
     
     const tAuth = Date.now();
@@ -64,7 +72,12 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     const { personaId, text } = body;
     
     if (!personaId || !text) {
-      return json({ error: "Missing personaId or text" }, 400);
+      // Silently handle missing params - return friendly message
+      const friendlyMessage = "Aapke request ko process karne mein kuch technical difficulty aayi hai. Thoda wait karo, phir try karo?";
+      return json({ 
+        replies: [friendlyMessage],
+        messages: []
+      }, 200);
     }
     
     /* ---------------------------------------------------------------------- */ /*             Step 1: Get thread + persona in parallel                   */ /* ---------------------------------------------------------------------- */ const [{ thread }, { persona }] = await Promise.all([
@@ -146,8 +159,8 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
       },
       body: JSON.stringify(requestBody)
     }).catch((e)=>{
-      console.error("❌ Gemini fetch failed:", e.message);
-      throw new Error("Gemini request failed: " + e.message);
+      // Silently handle Gemini fetch error
+      throw new Error("Gemini request failed");
     });
     const t4 = Date.now();
     console.log(`⏱️ Gemini API: ${t4 - t3}ms`);
@@ -158,25 +171,15 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     
     // Check if Gemini returned an error
     if (!r.ok) {
-      console.error("❌ Gemini API error - Status:", r.status);
-      console.error("❌ Gemini API error - Response:", raw);
-      let errorMessage = `Gemini API error (${r.status})`;
-      try {
-        const errorData = JSON.parse(raw);
-        errorMessage = errorData?.error?.message || errorData?.message || errorMessage;
-        console.error("❌ Gemini error details:", JSON.stringify(errorData, null, 2));
-      } catch (e) {
-        console.error("❌ Could not parse Gemini error response");
-      }
-      throw new Error(errorMessage);
+      // Silently handle Gemini API error - don't expose details
+      throw new Error("Gemini API error");
     }
     
     let data = {};
     try {
       data = JSON.parse(raw);
     } catch (parseError) {
-      console.error("❌ Gemini non-JSON:", raw.slice(0, 500));
-      console.error("❌ Parse error:", parseError);
+      // Silently handle parse error
       throw new Error("Invalid Gemini response");
     }
     // Handle safety or empty replies
@@ -296,10 +299,19 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
     
     return json(response);
   } catch (err) {
-    console.error("❌ chat-handler error:", err);
+    // Silently handle error - don't expose backend details
+    // Return a friendly error message that frontend will handle
+    const friendlyMessages = [
+      "Aapke request ko process karne mein kuch technical difficulty aayi hai. Thoda wait karo, phir try karo?",
+      "We regret to inform you ki system thoda busy hai. Ek baar phir se try karo?",
+      "Aapka request successfully process nahi ho paya. Thoda wait karo, phir try karo?"
+    ];
+    const friendlyMessage = friendlyMessages[Math.floor(Math.random() * friendlyMessages.length)];
+    
     return json({
-      error: err.message ?? String(err)
-    }, 500);
+      replies: [friendlyMessage],
+      messages: []
+    }, 200);
   }
 });
 /* -------------------------------------------------------------------------- */ /*                             Helper functions                               */ /* -------------------------------------------------------------------------- */ async function getOrCreateThread(phone, personaId) {
@@ -328,8 +340,9 @@ const PERSONA_MANAGER_URL = `${supabaseUrl}/functions/v1/persona-manager`;
 async function getPersona(personaId) {
   const { data, error } = await supabase.from("personas").select("*").eq("id", personaId).single();
   if (error) throw error;
+  // Return persona even if null (buildPersonaContext will handle it)
   return {
-    persona: data
+    persona: data || null
   };
 }
 async function insertBotBubble(threadId, text) {
@@ -359,13 +372,14 @@ function splitReplyIntoBubbles(text) {
     return cleanedText
       .split("&&&")
       .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+      .filter((s) => s.length > 0)
+      .slice(0, 2); // Limit to 2 bubbles max
   }
   
   // Fallback: Split by paragraphs or sentences
   const paragraphs = cleanedText.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
   if (paragraphs.length > 1 && paragraphs.length <= 4) {
-    return paragraphs;
+    return paragraphs.slice(0, 2); // Limit to 2 bubbles max
   }
   
   // Split long messages by sentences
@@ -376,7 +390,7 @@ function splitReplyIntoBubbles(text) {
       return [
         sentences.slice(0, mid).join(" ").trim(),
         sentences.slice(mid).join(" ").trim()
-      ].filter(Boolean);
+      ].filter(Boolean).slice(0, 2); // Limit to 2 bubbles max
     }
   }
   

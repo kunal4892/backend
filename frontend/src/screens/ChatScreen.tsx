@@ -16,6 +16,7 @@ import useChatStore, { hasHydratedSelector } from "../store/useChatStore";
 import { Animated } from "react-native";
 import { TypingIndicator } from "../utils/chatLoader";
 import { FlatList } from "react-native";
+import { getMessages } from "../lib/api";
 
 // CONSTANT FOR INPUT BAR ROW HEIGHT (The visible part)
 const INPUT_BAR_MIN_HEIGHT = 50; 
@@ -126,21 +127,120 @@ export default function ChatScreen({ route, navigation }: any) {
 
   
   const loadMessages = useCallback(
-    async (page: number) => { /* ... loadMessages implementation ... */ },
-    [chatId, chat?.personaId]
+    async (page: number) => {
+      if (!chat?.personaId || isLoading) return;
+      
+      setIsLoading(true);
+      try {
+        // Track the first visible message ID before loading (for scroll position maintenance)
+        const firstVisibleMessageId = chat.messages?.[0]?.id || null;
+        
+        const { messages: newMessages, totalMessages: total } = await getMessages({
+          personaId: chat.personaId,
+          page,
+          pageSize: PAGE_SIZE,
+        });
+
+        if (newMessages && newMessages.length > 0) {
+          const mapped: any[] = newMessages.map((m: any) => ({
+            id: m.id,
+            role: m.role === "model" ? "bot" : m.role,
+            text: (m.text || "").trim(),
+            ts: new Date(m.created_at).getTime(),
+          }));
+
+          // Merge with existing messages, avoiding duplicates
+          const existingIds = new Set((chat.messages || []).map((m: any) => m.id));
+          const uniqueNewMessages = mapped.filter((m: any) => !existingIds.has(m.id));
+          
+          if (uniqueNewMessages.length > 0) {
+            // Prepend older messages to the beginning (they have earlier timestamps)
+            const allMessages = [...uniqueNewMessages, ...(chat.messages || [])].sort((a, b) => a.ts - b.ts);
+            
+            // Update store
+            useChatStore.setState((state) => ({
+              chats: {
+                ...state.chats,
+                [chatId]: {
+                  ...state.chats[chatId],
+                  messages: allMessages,
+                },
+              },
+            }));
+            
+            setTotalMessages(total);
+            
+            // Maintain scroll position: scroll to the previously first visible message
+            if (firstVisibleMessageId && flatListRef.current) {
+              requestAnimationFrame(() => {
+                const newIndex = allMessages.findIndex((m: any) => m.id === firstVisibleMessageId);
+                if (newIndex >= 0) {
+                  try {
+                    flatListRef.current?.scrollToIndex({
+                      index: newIndex,
+                      animated: false,
+                      viewPosition: 0, // Keep it at the top of the viewport
+                    });
+                  } catch (e) {
+                    // If scrollToIndex fails, try scrollToOffset as fallback
+                    // Silently handle - don't log
+                  }
+                }
+              });
+            }
+          }
+        }
+      } catch (error) {
+        // Silently handle error - don't log to console
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [chatId, chat?.personaId, chat?.messages, isLoading]
   );
 
   useFocusEffect(
-    useCallback(() => { /* ... useFocusEffect implementation ... */ }, [hasHydrated, chatId])
+    useCallback(() => {
+      if (!hasHydrated || !chatId) return;
+      
+      // Initialize totalMessages when chat first loads
+      if (chat?.messages && chat.messages.length > 0 && totalMessages === 0) {
+        // Estimate total messages based on current count (will be updated when pagination happens)
+        // Or fetch the actual count - for now, set it to at least the current count
+        setTotalMessages(chat.messages.length);
+      }
+      
+      // Check if there's a pending response (last message is from user, no bot response yet)
+      // This handles the case when user navigates away and comes back while waiting for response
+      if (chat?.messages && chat.messages.length > 0) {
+        const lastMessage = chat.messages[chat.messages.length - 1];
+        // If last message is from user, assume response is pending (will be cleared when bot responds)
+        // Only check if message is recent (within last 2 minutes) to avoid showing typing for old messages
+        const messageAge = Date.now() - lastMessage.ts;
+        if (lastMessage.role === "user" && messageAge < 120000) { // 2 minutes
+          setIsTyping(true);
+        } else {
+          setIsTyping(false);
+        }
+      } else {
+        setIsTyping(false);
+      }
+      
+      // Mark as loaded after hydration
+      if (hasHydrated && !hasLoadedInitial) {
+        setHasLoadedInitial(true);
+      }
+    }, [hasHydrated, chatId, chat?.messages, totalMessages, hasLoadedInitial])
   );
 
   const data = React.useMemo(() => { 
       const messages = chat?.messages || [];
-      const reversedMessages = [...messages].reverse();
+      // Messages are in chronological order (oldest to newest)
+      // Without inverted, we display them as-is: oldest at top, newest at bottom
       
       const result = [
-        ...(isTyping && displayPersona ? [{ id: "typing", role: "bot", typing: true, ts: Date.now() }] : []),
-        ...reversedMessages,
+        ...messages, // Oldest to newest (top to bottom)
+        ...(isTyping && displayPersona ? [{ id: "typing", role: "bot", typing: true, ts: Date.now() }] : []), // Typing at bottom
       ];
 
       if (hasLoadedInitial && displayPersona && messages.length === 0 && result.length === 0) {
@@ -193,16 +293,20 @@ export default function ChatScreen({ route, navigation }: any) {
       const text = input.trim();
       if (!text) return;
       if (!chatId) {
-        console.error("No chatId available");
+        // Silently handle - don't log
         return;
       }
       setInput("");
       const id = Date.now().toString();
       setIsTyping(true);
+      
+      // Ensure we're at bottom before sending (user message will be added)
+      setIsNearBottom(true);
+      
       try {
         await sendUserMessage(chatId, text);
       } catch (error) {
-        console.error("Error sending message:", error);
+        // Silently handle error - don't log to console
       } finally {
         setIsTyping(false);
       }
@@ -210,6 +314,19 @@ export default function ChatScreen({ route, navigation }: any) {
       setSeenMap((prev) => ({ ...prev, [id]: 1 }));
       setTimeout(() => setSeenMap((prev) => ({ ...prev, [id]: 2 })), 1000);
       setTimeout(() => setSeenMap((prev) => ({ ...prev, [id]: 3 })), 2000);
+      
+      // Scroll to bottom after user message is added
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (flatListRef.current) {
+            try {
+              flatListRef.current.scrollToEnd({ animated: true });
+            } catch (e) {
+              // Silently fail
+            }
+          }
+        }, 100);
+      });
   };
 
   const renderTicks = (msgId: string, role: string) => { 
@@ -230,7 +347,7 @@ export default function ChatScreen({ route, navigation }: any) {
         }
         
         if (!item.text && !item.typing) {
-          console.error(`❌ [ChatScreen] Item ${index} has no text and no typing:`, item);
+          // Silently handle - don't log
           return null;
         }
         
@@ -241,7 +358,12 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const handleScrollToBottom = () => { 
       if (data.length > 0) {
-        flatListRef.current?.scrollToIndex({ index: 0, animated: true, viewPosition: 0 });
+        const lastIndex = data.length - 1;
+        try {
+          flatListRef.current?.scrollToIndex({ index: lastIndex, animated: true, viewPosition: 1 });
+        } catch (e) {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }
         setIsNearBottom(true);
       }
   };
@@ -249,11 +371,14 @@ export default function ChatScreen({ route, navigation }: any) {
   const handleScroll = useCallback(
     (e: any) => { 
         const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-        const paddingToTop = 100;
-        const atBottom = contentOffset.y <= 5;
-        const nearTop = contentOffset.y >= contentSize.height - layoutMeasurement.height - paddingToTop;
+        const paddingToBottom = 100;
+        // At bottom when scrolled to the end (contentOffset + layoutMeasurement ≈ contentSize)
+        const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+        const atBottom = distanceFromBottom <= 5;
+        const nearTop = contentOffset.y <= paddingToBottom;
         setIsNearBottom(atBottom);
 
+        // Load more messages when scrolling to top (oldest messages)
         if (nearTop && currentPage * PAGE_SIZE < totalMessages && !isLoading) {
           const nextPage = currentPage + 1;
           loadMessages(nextPage);
@@ -284,8 +409,7 @@ export default function ChatScreen({ route, navigation }: any) {
         data={data}
         // Safer check for chat data
         extraData={`${data.length}-${chat ? chat.messages.length : 0}-${hasLoadedInitial}-${inputBottomMargin}`} 
-        key={`flatlist-${chatId}-${data.length}`}
-        inverted
+        key={`flatlist-${chatId}`}
         style={styles.flatList}
         // FlatList content padding is constant
         contentContainerStyle={[
@@ -296,7 +420,7 @@ export default function ChatScreen({ route, navigation }: any) {
         keyExtractor={(m, index) => {
           const key = String(m.id || `item-${index}`);
           if (!m.id) {
-            console.warn(`⚠️ [ChatScreen] Item ${index} has no ID, using fallback:`, m);
+            // Silently handle - don't log
           }
           return key;
         }}
@@ -308,21 +432,23 @@ export default function ChatScreen({ route, navigation }: any) {
         onScroll={handleScroll}
         scrollEventThrottle={200}
         onContentSizeChange={(width, height) => {
-          if (height > 0 && data.length > 0 && isNearBottom && flatListRef.current) {
+          // Only auto-scroll to bottom if:
+          // 1. We're near the bottom (user hasn't scrolled up)
+          // 2. We're not currently loading older messages (pagination)
+          // 3. This is for new messages at the bottom, not pagination at the top
+          if (height > 0 && data.length > 0 && isNearBottom && !isLoading && flatListRef.current) {
+            // Use a ref to track if we should scroll (prevent multiple scrolls)
             requestAnimationFrame(() => {
               setTimeout(() => {
-                if (flatListRef.current && isNearBottom) {
+                if (flatListRef.current && isNearBottom && !isLoading) {
                   try {
-                    flatListRef.current.scrollToIndex({ index: 0, animated: false, viewPosition: 0 });
+                    // Use scrollToEnd which is more reliable than scrollToIndex
+                    flatListRef.current.scrollToEnd({ animated: false });
                   } catch (e) {
-                    try {
-                      flatListRef.current.scrollToOffset({ offset: 0, animated: false });
-                    } catch (e2) {
-                      // Silently fail
-                    }
+                    // Silently fail
                   }
                 }
-              }, 100);
+              }, 50); // Reduced timeout for faster response
             });
           }
         }}
