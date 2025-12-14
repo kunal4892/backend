@@ -45,6 +45,7 @@ function getFriendlyErrorMessage(): string {
  *
  * @param messages   Array of prior conversation messages (user/bot/system cleaned)
  * @param context    phone (user id), personaId, optional personaContext
+ * @returns Object with replies (text array) and messages (full objects with UUIDs)
  */
 export async function chatLLM(
   { messages, text, personaContext }: { messages: any[]; text: string; personaContext?: string },
@@ -94,13 +95,26 @@ export async function chatLLM(
       await AsyncStorage.setItem("app_key", data.new_token);
     }
 
-    // ✅ Backend returns an array of replies (bubbles)
-    if (Array.isArray(data.replies) && data.replies.length > 0) {
-      return data.replies;
-    }
-
-    // fallback
-    return [data.reply || "⚠️ No reply"];
+    // ✅ Backend returns both replies (text) and messages (full objects with UUIDs)
+    // Return both so we can use the actual database IDs
+    const result = {
+      replies: Array.isArray(data.replies) && data.replies.length > 0 
+        ? data.replies 
+        : [data.reply || "⚠️ No reply"],
+      messages: Array.isArray(data.messages) ? data.messages : []
+    };
+    
+    // Debug: Log backend response
+    console.log("🔍 Backend response structure:", {
+      hasReplies: !!data.replies,
+      repliesLength: data.replies?.length || 0,
+      hasMessages: !!data.messages,
+      messagesLength: data.messages?.length || 0,
+      firstMessageId: data.messages?.[0]?.id,
+      firstMessageRole: data.messages?.[0]?.role
+    });
+    
+    return result;
   } catch (error: any) {
     // Silently handle error - don't log to console
     
@@ -191,5 +205,78 @@ export async function getMessages({
     }
     
     throw new Error(getFriendlyErrorMessage());
+  }
+}
+
+/**
+ * Report offensive or inappropriate AI-generated content
+ * @param messageId - ID of the message to report
+ * @param reason - Reason for reporting (offensive, inappropriate, harmful, etc.)
+ * @param additionalInfo - Optional additional context
+ */
+export async function reportContent(
+  messageId: string,
+  reason: string,
+  additionalInfo?: string
+) {
+  try {
+    console.log("📤 reportContent called with:", { messageId, reason, messageIdType: typeof messageId });
+    
+    const token = await AsyncStorage.getItem("app_key");
+    if (!token) {
+      console.error("❌ No token found");
+      throw new Error("No token found - please login");
+    }
+
+    const fcmToken = await getFcmTokenForHeaders();
+    const headers: Record<string, string> = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    };
+    if (fcmToken) {
+      headers["X-FCM-Token"] = fcmToken;
+    }
+
+    const url = `${SUPABASE_URL}/report-content`;
+    const body = JSON.stringify({
+      messageId,
+      reason,
+      additionalInfo: additionalInfo || "",
+    });
+    
+    console.log("🌐 Making request to:", url);
+    console.log("📦 Request body:", body);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+    });
+    
+    console.log("📥 Response status:", res.status, res.statusText);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      let errorMessage = "Failed to submit report";
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch {
+        // If parsing fails, use the raw text or default message
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await res.json();
+    
+    // Check if backend refreshed the token
+    if (data.new_token) {
+      await AsyncStorage.setItem("app_key", data.new_token);
+    }
+
+    return data;
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to submit report");
   }
 }

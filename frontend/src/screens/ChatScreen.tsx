@@ -9,6 +9,9 @@ import {
   TouchableOpacity,
   Keyboard,
   Platform,
+  Alert,
+  Clipboard,
+  Share,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"; 
 import { useFocusEffect } from "@react-navigation/native";
@@ -16,7 +19,7 @@ import useChatStore, { hasHydratedSelector } from "../store/useChatStore";
 import { Animated } from "react-native";
 import { TypingIndicator } from "../utils/chatLoader";
 import { FlatList } from "react-native";
-import { getMessages } from "../lib/api";
+import { getMessages, reportContent } from "../lib/api";
 
 // CONSTANT FOR INPUT BAR ROW HEIGHT (The visible part)
 const INPUT_BAR_MIN_HEIGHT = 50; 
@@ -24,7 +27,7 @@ const INPUT_BAR_MIN_HEIGHT = 50;
 const INPUT_BUFFER_HEIGHT = 24; // Increased to 24 pixels for guaranteed clearance
 
 // ... (ChatBubble component remains the same)
-const ChatBubble = memo(({ item, renderTicks }: any) => {
+const ChatBubble = memo(({ item, renderTicks, onMenuPress }: any) => {
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -41,6 +44,7 @@ const ChatBubble = memo(({ item, renderTicks }: any) => {
   });
 
   const messageText = item.text ? String(item.text) : "";
+  const isBotMessage = item.role === "bot";
   
   return (
     <Animated.View
@@ -50,10 +54,26 @@ const ChatBubble = memo(({ item, renderTicks }: any) => {
         { opacity: fadeAnim },
       ]}
     >
-      <Text style={styles.text}>{messageText}</Text>
-      <View style={styles.metaRow}>
-        <Text style={styles.time}>{time}</Text>
-        {renderTicks(String(item.id), item.role)}
+      <View>
+        <Text style={styles.text}>{messageText}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.time}>{time}</Text>
+          {renderTicks(String(item.id), item.role)}
+          {isBotMessage && onMenuPress && (
+            <TouchableOpacity
+              onPress={() => onMenuPress(item)}
+              style={styles.menuButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.6}
+            >
+              <View style={styles.menuButtonContainer}>
+                <View style={styles.menuDot} />
+                <View style={styles.menuDot} />
+                <View style={styles.menuDot} />
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </Animated.View>
   );
@@ -76,6 +96,8 @@ export default function ChatScreen({ route, navigation }: any) {
   const [hasLoadedInitial, setHasLoadedInitial] = useState(false);
   const lastVisibleIndex = useRef<number | null>(null);
   const PAGE_SIZE = 100;
+  const [showMenuModal, setShowMenuModal] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
   
   const [keyboardHeight, setKeyboardHeight] = useState(0); 
   const insets = useSafeAreaInsets(); 
@@ -340,6 +362,108 @@ export default function ChatScreen({ route, navigation }: any) {
       return null;
   };
 
+  const submitReport = async (messageId: string | number, reason: string, additionalInfo?: string) => {
+    try {
+      console.log("🚨 submitReport called with:", { messageId, reason, messageIdType: typeof messageId });
+      
+      // Convert to string - if it's a number, it's a local message that hasn't been synced yet
+      const messageIdStr = String(messageId);
+      console.log("🔍 Message ID string:", messageIdStr, "Length:", messageIdStr.length);
+      
+      // Check if it's a UUID (server message) or a number (local message)
+      // UUIDs are 36 characters with dashes: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageIdStr);
+      console.log("✅ Is UUID?", isUUID);
+      
+      if (!isUUID) {
+        console.warn("⚠️ Message ID is not a UUID, blocking report");
+        Alert.alert(
+          "Cannot Report", 
+          "This message hasn't been synced to the server yet. Please wait a moment and try again."
+        );
+        return;
+      }
+      
+      console.log("✅ UUID validated, calling reportContent API");
+      await reportContent(messageIdStr, reason, additionalInfo);
+      console.log("✅ Report submitted successfully");
+      Alert.alert("Thank You", "Your report has been submitted. We'll review it shortly.");
+    } catch (error: any) {
+      console.error("❌ Report submission error:", error);
+      const errorMessage = error?.message || "Unknown error";
+      Alert.alert("Error", `Failed to submit report: ${errorMessage}`);
+    }
+  };
+
+  const handleReport = useCallback((message: any) => {
+    Alert.alert(
+      "Report Content",
+      "Report this message if it contains inappropriate, offensive, or harmful content.",
+      [
+        {
+          text: "Offensive Content",
+          onPress: () => submitReport(message.id, "offensive"),
+        },
+        {
+          text: "Inappropriate",
+          onPress: () => submitReport(message.id, "inappropriate"),
+        },
+        {
+          text: "Harmful or Dangerous",
+          onPress: () => submitReport(message.id, "harmful"),
+        },
+        {
+          text: "Spam or Misleading",
+          onPress: () => submitReport(message.id, "spam"),
+        },
+        {
+          text: "Other",
+          onPress: () => submitReport(message.id, "other", ""),
+        },
+        { text: "Cancel", style: "cancel" },
+      ],
+      { cancelable: true }
+    );
+  }, []);
+
+  const handleMenuPress = useCallback((message: any) => {
+    const messageText = message.text || "";
+    
+    Alert.alert(
+      "Options",
+      "",
+      [
+        {
+          text: "Copy",
+          onPress: () => {
+            Clipboard.setString(messageText);
+            Alert.alert("Copied", "Message copied to clipboard");
+          },
+        },
+        {
+          text: "Share",
+          onPress: async () => {
+            try {
+              await Share.share({
+                message: messageText,
+                title: "Shared from AI Friend",
+              });
+            } catch (error: any) {
+              // User cancelled or error occurred
+            }
+          },
+        },
+        {
+          text: "Report",
+          onPress: () => handleReport(message),
+          style: "destructive",
+        },
+        { text: "Cancel", style: "cancel" },
+      ],
+      { cancelable: true }
+    );
+  }, [handleReport]);
+
   const renderItem = useCallback(
     ({ item, index }: any) => { 
         if (item.typing) {
@@ -351,9 +475,9 @@ export default function ChatScreen({ route, navigation }: any) {
           return null;
         }
         
-        return <ChatBubble item={item} renderTicks={renderTicks} />;
+        return <ChatBubble item={item} renderTicks={renderTicks} onMenuPress={handleMenuPress} />;
     },
-    [renderTicks]
+    [renderTicks, handleMenuPress]
   );
 
   const handleScrollToBottom = () => { 
@@ -557,6 +681,23 @@ const styles = StyleSheet.create({
   },
   time: { fontSize: 11, color: "#777", marginRight: 4 },
   tick: { fontSize: 11, color: "#777" },
+  menuButton: {
+    marginLeft: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  menuButtonContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+  menuDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#999",
+  },
 
   inputWrapper: {
     // No absolute positioning! Stays in the Flex flow.

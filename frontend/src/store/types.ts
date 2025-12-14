@@ -1,5 +1,5 @@
 export type Msg = {
-  id: number;
+  id: number | string; // number for local messages, string (UUID) for server messages
   role: "user" | "bot";
   text: string;
   ts: number;

@@ -196,18 +196,38 @@ const useChatStore = create<State>()(
           if (!stored) throw new Error("user not registed");
 
           // 2️⃣ Call backend – backend now fetches full context + summary
-          const replies: string[] = await chatLLM(
+          const response = await chatLLM(
             { messages: [], text }, // ✅ no more history or context from frontend
             { personaId: chat.personaId }
           );
 
-          // 3️⃣ Append replies from backend
+          // Handle both old format (array of strings) and new format (object with replies and messages)
+          const replies: string[] = Array.isArray(response) ? response : response.replies || [];
+          const backendMessages: any[] = Array.isArray(response) ? [] : (response.messages || []);
+
+          // Debug: Log what we received
+          console.log("📦 Backend response:", {
+            repliesCount: replies.length,
+            messagesCount: backendMessages.length,
+            firstMessageId: backendMessages[0]?.id,
+            firstMessageRole: backendMessages[0]?.role
+          });
+
+          // 3️⃣ Append replies from backend, using actual database IDs if available
           for (let r = 0; r < replies.length; r++) {
+            const backendMsg = backendMessages[r];
+            const messageId = backendMsg?.id || Date.now() + r + 1;
+            console.log(`💬 Message ${r}: Using ID ${messageId} (${typeof messageId})`);
+            
             const botMsg: Msg = {
-              id: Date.now() + r + 1,
+              // Use database UUID if available, otherwise fallback to numeric ID
+              id: messageId,
               role: "bot",
               text: replies[r].trim(),
-              ts: Date.now() + r + 1,
+              // Use database timestamp if available, otherwise use current time
+              ts: backendMsg?.created_at 
+                ? new Date(backendMsg.created_at).getTime() 
+                : Date.now() + r + 1,
             };
             set((st) => {
               const updatedChat = st.chats[chatId];
