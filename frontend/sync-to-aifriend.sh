@@ -28,3 +28,6 @@ echo "✅ Successfully synced to AIFriend repo!"
 echo ""
 echo "Current commit: $(git log --oneline -1)"
 
+
+
+

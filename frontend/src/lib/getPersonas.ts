@@ -119,7 +119,7 @@ export async function fetchPersonas(): Promise<Persona[]> {
 
     console.log("✅ fetchPersonas: Extracted personas array length:", arr.length);
     console.log("✅ fetchPersonas: SUCCESS - returning personas");
-    
+
     return arr as Persona[];
     
   } catch (error: any) {

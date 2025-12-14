@@ -109,11 +109,11 @@ pwIDAQAB
 
       let cipherBase64: string;
       try {
-        const cipher = CryptoJS.AES.encrypt(plaintext, CryptoJS.enc.Hex.parse(aesKeyHex), {
-          iv: CryptoJS.enc.Hex.parse(ivHex),
-          mode: CryptoJS.mode.CBC,
-          padding: CryptoJS.pad.Pkcs7
-        });
+      const cipher = CryptoJS.AES.encrypt(plaintext, CryptoJS.enc.Hex.parse(aesKeyHex), {
+        iv: CryptoJS.enc.Hex.parse(ivHex),
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
         cipherBase64 = cipher.toString();
       } catch (aesError: any) {
         console.error("❌ FRONTEND: AES encryption failed:", aesError);
@@ -196,7 +196,7 @@ pwIDAQAB
 
       console.log("📤 FRONTEND: Sending registration request to:", `${SUPABASE_URL}/register`);
       console.log("📤 FRONTEND: Request body size:", jsonBody.length, "bytes");
-      
+
       const res = await fetch(`${SUPABASE_URL}/register`, {
         method: "POST",
         headers: { 
@@ -289,7 +289,7 @@ pwIDAQAB
       console.log("📥 FRONTEND: app_key type:", typeof data?.app_key);
       console.log("📥 FRONTEND: app_key length:", data?.app_key?.length || 0);
       console.log("📥 FRONTEND: app_key preview:", data?.app_key ? `${data.app_key.substring(0, 50)}...` : "MISSING");
-      
+
       if (data?.app_key) {
         console.log("✅ FRONTEND: app_key found, saving to AsyncStorage");
         // Save token - use phone from response if available, otherwise fallback to local state

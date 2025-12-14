@@ -47,9 +47,9 @@ export async function verifyToken(
   let decoded;
   try {
     decoded = await jose.jwtVerify(
-      token,
-      new TextEncoder().encode(JWT_SECRET)
-    );
+    token,
+    new TextEncoder().encode(JWT_SECRET)
+  );
   } catch (verifyError: any) {
     console.error("❌ JWT verification error:", verifyError.code, verifyError.message);
     console.error("❌ Token preview:", token.substring(0, 50) + "...");

@@ -84,9 +84,9 @@ serve(async (req)=>{
     console.log("\n=== BACKEND: BODY PARSING ===");
     let body: any = {};
     if (req.method === "POST") {
-      try {
-        body = await req.json();
-        console.log("DEBUG: Parsed body:", JSON.stringify(body));
+    try {
+      body = await req.json();
+      console.log("DEBUG: Parsed body:", JSON.stringify(body));
       } catch (e) {
         console.log("DEBUG: Failed to parse POST body:", e);
       }

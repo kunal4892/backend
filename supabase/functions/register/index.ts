@@ -241,7 +241,7 @@ serve(async (req)=>{
       try {
         obj = JSON.parse(plaintext);
         console.log("✅ BACKEND: Successfully parsed decrypted JSON");
-        console.log("DEBUG: Parsed JSON keys:", Object.keys(obj));
+      console.log("DEBUG: Parsed JSON keys:", Object.keys(obj));
         console.log("DEBUG: Parsed JSON values:", {
           hasPhone: !!obj.phone,
           phone: obj.phone,
@@ -366,9 +366,9 @@ serve(async (req)=>{
     let app_key;
     try {
       app_key = await new jose.SignJWT({
-        phone: user.phone
-      }).setProtectedHeader({
-        alg: "HS256"
+      phone: user.phone
+    }).setProtectedHeader({
+      alg: "HS256"
       }).setIssuedAt().setExpirationTime("30s").sign(new TextEncoder().encode(JWT_SECRET));
       console.log("✅ BACKEND: Token generated successfully");
       console.log("DEBUG: Token length:", app_key.length);
