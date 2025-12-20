@@ -8,7 +8,7 @@ This document provides comprehensive documentation for all Supabase Edge Functio
 - **Runtime**: Deno 1.40+
 - **Framework**: Supabase Edge Functions
 - **Database**: PostgreSQL (via Supabase)
-- **AI Service**: Google Gemini 2.5 Pro/Flash
+- **AI Service**: Google Gemini 2.5 Flash / 1.5 Pro (for summaries)
 - **Authentication**: JWT (JSON Web Tokens)
 - **Encryption**: RSA-OAEP + AES-CBC
 
@@ -193,14 +193,14 @@ X-FCM-Token: {optional-fcm-token}
 3. **Get Persona**: Fetch persona configuration
 4. **Fetch History**: Get last 10 messages for context
 5. **Build Context**: Combine persona context with chat history
-6. **Call Gemini**: Send message to Gemini 2.5 Pro API
+6. **Call Gemini**: Send message to Gemini 2.5 Flash API
 7. **Process Response**: Parse Gemini response (handles multiple candidates)
 8. **Save Messages**: Store user message and bot response
 9. **Update Thread**: Update thread timestamp
 10. **Return Response**: Send replies and message objects back
 
 **Gemini Integration**:
-- **Model**: `gemini-2.5-pro`
+- **Model**: `gemini-2.5-flash` (optimized for speed and cost)
 - **Configuration**:
   - Candidate count: 2
   - Temperature: 0.9
@@ -526,7 +526,7 @@ Content-Type: application/json
 }
 ```
 
-**Gemini Model**: `gemini-1.5-flash` (optimized for speed)
+**Gemini Model**: `gemini-2.5-pro` (same as chat-handler, but could be changed to flash for speed)
 
 **Features**:
 - Personalized notifications
