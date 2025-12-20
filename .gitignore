@@ -41,3 +41,5 @@ build/
 *.sh
 *.md
 !README.md
+!RELEASENOTES.md
+!UI_README.md
