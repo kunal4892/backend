@@ -504,7 +504,7 @@ Content-Type: application/json
 3. Return summary
 
 **Teaser Generation**:
-- Uses Gemini 1.5 Flash (fast model)
+- Uses Gemini 2.5 Pro (same as chat-handler, optimized for quality)
 - Generates short, engaging message (1-2 sentences)
 - Based on conversation context
 - Personalized with persona name
