@@ -97,24 +97,12 @@ export async function chatLLM(
 
     // ✅ Backend returns both replies (text) and messages (full objects with UUIDs)
     // Return both so we can use the actual database IDs
-    const result = {
+    return {
       replies: Array.isArray(data.replies) && data.replies.length > 0 
         ? data.replies 
         : [data.reply || "⚠️ No reply"],
       messages: Array.isArray(data.messages) ? data.messages : []
     };
-    
-    // Debug: Log backend response
-    console.log("🔍 Backend response structure:", {
-      hasReplies: !!data.replies,
-      repliesLength: data.replies?.length || 0,
-      hasMessages: !!data.messages,
-      messagesLength: data.messages?.length || 0,
-      firstMessageId: data.messages?.[0]?.id,
-      firstMessageRole: data.messages?.[0]?.role
-    });
-    
-    return result;
   } catch (error: any) {
     // Silently handle error - don't log to console
     
@@ -220,11 +208,8 @@ export async function reportContent(
   additionalInfo?: string
 ) {
   try {
-    console.log("📤 reportContent called with:", { messageId, reason, messageIdType: typeof messageId });
-    
     const token = await AsyncStorage.getItem("app_key");
     if (!token) {
-      console.error("❌ No token found");
       throw new Error("No token found - please login");
     }
 
@@ -237,23 +222,15 @@ export async function reportContent(
       headers["X-FCM-Token"] = fcmToken;
     }
 
-    const url = `${SUPABASE_URL}/report-content`;
-    const body = JSON.stringify({
-      messageId,
-      reason,
-      additionalInfo: additionalInfo || "",
-    });
-    
-    console.log("🌐 Making request to:", url);
-    console.log("📦 Request body:", body);
-
-    const res = await fetch(url, {
+    const res = await fetch(`${SUPABASE_URL}/report-content`, {
       method: "POST",
       headers,
-      body,
+      body: JSON.stringify({
+        messageId,
+        reason,
+        additionalInfo: additionalInfo || "",
+      }),
     });
-    
-    console.log("📥 Response status:", res.status, res.statusText);
 
     if (!res.ok) {
       const errorText = await res.text();

@@ -205,23 +205,12 @@ const useChatStore = create<State>()(
           const replies: string[] = Array.isArray(response) ? response : response.replies || [];
           const backendMessages: any[] = Array.isArray(response) ? [] : (response.messages || []);
 
-          // Debug: Log what we received
-          console.log("📦 Backend response:", {
-            repliesCount: replies.length,
-            messagesCount: backendMessages.length,
-            firstMessageId: backendMessages[0]?.id,
-            firstMessageRole: backendMessages[0]?.role
-          });
-
           // 3️⃣ Append replies from backend, using actual database IDs if available
           for (let r = 0; r < replies.length; r++) {
             const backendMsg = backendMessages[r];
-            const messageId = backendMsg?.id || Date.now() + r + 1;
-            console.log(`💬 Message ${r}: Using ID ${messageId} (${typeof messageId})`);
-            
             const botMsg: Msg = {
               // Use database UUID if available, otherwise fallback to numeric ID
-              id: messageId,
+              id: backendMsg?.id || Date.now() + r + 1,
               role: "bot",
               text: replies[r].trim(),
               // Use database timestamp if available, otherwise use current time

@@ -12,6 +12,7 @@ import {
   Alert,
   Clipboard,
   Share,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"; 
 import { useFocusEffect } from "@react-navigation/native";
@@ -137,9 +138,22 @@ export default function ChatScreen({ route, navigation }: any) {
     // When keyboard is down, margin is 0.
     if (keyboardHeight === 0) return 0;
 
+    const screenHeight = Dimensions.get('window').height;
+    
+    // FIX: Handle negative/invalid keyboard heights (some Android devices report negative values)
+    // Calculate adaptive default based on screen size (keyboards are typically 30-40% of screen height)
+    // This works across different device sizes (phones, tablets, etc.)
+    const adaptiveDefaultHeight = Math.round(screenHeight * 0.35); // 35% of screen height
+    
+    // Use reported height if valid, otherwise use adaptive default
+    const validKeyboardHeight = keyboardHeight > 0 ? keyboardHeight : adaptiveDefaultHeight;
+    
     // When keyboard is up, the margin is the height of the keyboard minus the safe area inset,
     // PLUS the buffer height to lift the input field slightly.
-    return keyboardHeight - insets.bottom + INPUT_BUFFER_HEIGHT;
+    // Ensure margin is never negative (safety check)
+    const margin = Math.max(0, validKeyboardHeight - insets.bottom + INPUT_BUFFER_HEIGHT);
+    
+    return margin;
 
   }, [keyboardHeight, insets.bottom]);
 
@@ -364,19 +378,14 @@ export default function ChatScreen({ route, navigation }: any) {
 
   const submitReport = async (messageId: string | number, reason: string, additionalInfo?: string) => {
     try {
-      console.log("🚨 submitReport called with:", { messageId, reason, messageIdType: typeof messageId });
-      
       // Convert to string - if it's a number, it's a local message that hasn't been synced yet
       const messageIdStr = String(messageId);
-      console.log("🔍 Message ID string:", messageIdStr, "Length:", messageIdStr.length);
       
       // Check if it's a UUID (server message) or a number (local message)
       // UUIDs are 36 characters with dashes: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageIdStr);
-      console.log("✅ Is UUID?", isUUID);
       
       if (!isUUID) {
-        console.warn("⚠️ Message ID is not a UUID, blocking report");
         Alert.alert(
           "Cannot Report", 
           "This message hasn't been synced to the server yet. Please wait a moment and try again."
@@ -384,12 +393,9 @@ export default function ChatScreen({ route, navigation }: any) {
         return;
       }
       
-      console.log("✅ UUID validated, calling reportContent API");
       await reportContent(messageIdStr, reason, additionalInfo);
-      console.log("✅ Report submitted successfully");
       Alert.alert("Thank You", "Your report has been submitted. We'll review it shortly.");
     } catch (error: any) {
-      console.error("❌ Report submission error:", error);
       const errorMessage = error?.message || "Unknown error";
       Alert.alert("Error", `Failed to submit report: ${errorMessage}`);
     }
@@ -430,7 +436,7 @@ export default function ChatScreen({ route, navigation }: any) {
     const messageText = message.text || "";
     
     Alert.alert(
-      "Options",
+      "Chat Options",
       "",
       [
         {
