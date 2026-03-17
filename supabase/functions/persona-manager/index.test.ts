@@ -346,11 +346,13 @@ Deno.test("Database - uses fallback when DB fetch fails", async () => {
 });
 
 Deno.test("Response - buildContext action returns context", async () => {
+  const context = "test context string";
   const expectedResponse = {
-    context: expect.any(String),
+    context: context,
   };
   
-  assertExists(expectedResponse);
+  assertEquals(typeof expectedResponse.context, "string");
+  assertExists(expectedResponse.context);
 });
 
 Deno.test("CORS headers - returns correct headers", () => {

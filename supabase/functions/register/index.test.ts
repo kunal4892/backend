@@ -98,9 +98,9 @@ Deno.test("Mobile registration - validates required encrypted fields", async () 
     encrypted_key: "key-only",
   };
   
-  const hasAllFields = incompleteBody.encrypted_key && 
+  const hasAllFields = !!(incompleteBody.encrypted_key && 
                        (incompleteBody as any).iv && 
-                       (incompleteBody as any).payload;
+                       (incompleteBody as any).payload);
   
   assertEquals(hasAllFields, false);
 });

@@ -65,7 +65,7 @@ Deno.test("CORS preflight request returns 204", async () => {
     method: "OPTIONS",
   });
   
-  const response = new Response("ok", {
+  const response = new Response(null, {
     status: 204,
     headers: {
       "Access-Control-Allow-Origin": "*",

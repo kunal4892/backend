@@ -60,7 +60,7 @@ export function extractTraceIds(req: Request): { requestId: string; correlationI
 }
 
 // Redact sensitive fields from log data
-function redactSensitive(data: unknown): unknown {
+export function redactSensitive(data: unknown): unknown {
   if (data === null || data === undefined) return data;
   
   if (typeof data === "string") {

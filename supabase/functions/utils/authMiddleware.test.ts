@@ -21,7 +21,7 @@ async function createExpiredToken(payload: object): Promise<string> {
   return await new jose.SignJWT(payload as jose.JWTPayload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("-1h") // Already expired
+    .setExpirationTime(Math.floor(Date.now() / 1000) - 1) // Already expired (1 second ago)
     .sign(new TextEncoder().encode(TEST_JWT_SECRET));
 }
 
