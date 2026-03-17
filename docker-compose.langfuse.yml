@@ -1,0 +1,344 @@
+# =============================================================================
+# Langfuse Self-Hosted Docker Compose Configuration
+# =============================================================================
+# Production-ready setup for 100% free LLM observability
+# 
+# Resource Requirements:
+#   - CPU: 4 cores recommended (minimum 2)
+#   - RAM: 16GB recommended (minimum 8GB)
+#   - Storage: 50GB+ for logs and trace data
+#
+# Services:
+#   - langfuse-web: UI and API (port 3000)
+#   - langfuse-worker: Async processing
+#   - postgres: Transactional database
+#   - clickhouse: Analytics database for traces
+#   - redis: Cache and queue
+#   - minio: S3-compatible storage for events
+#
+# Security Notes:
+#   - All internal services bound to Docker network only
+#   - Only langfuse-web (3000) and minio (9090) exposed externally
+#   - Change all default passwords before production use
+#
+# Documentation: https://langfuse.com/docs/deployment/self-host
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ===========================================================================
+  # Langfuse Web - UI and API Server
+  # ===========================================================================
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:3
+    container_name: langfuse-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - langfuse-network
+    ports:
+      - "3000:3000"
+    environment:
+      # Core Configuration
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - SALT=${SALT}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      
+      # Database
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # ClickHouse Analytics
+      - CLICKHOUSE_MIGRATION_URL=${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
+      - CLICKHOUSE_URL=${CLICKHOUSE_URL:-http://clickhouse:8123}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_CLUSTER_ENABLED=${CLICKHOUSE_CLUSTER_ENABLED:-false}
+      
+      # Redis
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_AUTH=${REDIS_AUTH}
+      - REDIS_TLS_ENABLED=${REDIS_TLS_ENABLED:-false}
+      
+      # S3/MinIO Event Storage
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=${LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID:-minio}
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=${LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY}
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://minio:9000}
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE:-true}
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
+      
+      # S3/MinIO Media Storage
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=${LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID:-minio}
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=${LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://minio:9000}
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE:-true}
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
+      
+      # Batch Export (optional)
+      - LANGFUSE_S3_BATCH_EXPORT_ENABLED=${LANGFUSE_S3_BATCH_EXPORT_ENABLED:-false}
+      - LANGFUSE_S3_BATCH_EXPORT_BUCKET=${LANGFUSE_S3_BATCH_EXPORT_BUCKET:-langfuse}
+      - LANGFUSE_S3_BATCH_EXPORT_PREFIX=${LANGFUSE_S3_BATCH_EXPORT_PREFIX:-exports/}
+      - LANGFUSE_S3_BATCH_EXPORT_REGION=${LANGFUSE_S3_BATCH_EXPORT_REGION:-auto}
+      - LANGFUSE_S3_BATCH_EXPORT_ENDPOINT=${LANGFUSE_S3_BATCH_EXPORT_ENDPOINT:-http://minio:9000}
+      - LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT=${LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT:-http://localhost:9090}
+      - LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID=${LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID:-minio}
+      - LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY=${LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY}
+      - LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE=${LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE:-true}
+      
+      # Optional Features
+      - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-true}
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+      
+      # Email (optional)
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-}
+      - SMTP_CONNECTION_URL=${SMTP_CONNECTION_URL:-}
+      
+      # Initial Setup (optional - creates org/project/user on first run)
+      - LANGFUSE_INIT_ORG_ID=${LANGFUSE_INIT_ORG_ID:-}
+      - LANGFUSE_INIT_ORG_NAME=${LANGFUSE_INIT_ORG_NAME:-}
+      - LANGFUSE_INIT_PROJECT_ID=${LANGFUSE_INIT_PROJECT_ID:-}
+      - LANGFUSE_INIT_PROJECT_NAME=${LANGFUSE_INIT_PROJECT_NAME:-}
+      - LANGFUSE_INIT_PROJECT_PUBLIC_KEY=${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      - LANGFUSE_INIT_PROJECT_SECRET_KEY=${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      - LANGFUSE_INIT_USER_EMAIL=${LANGFUSE_INIT_USER_EMAIL:-}
+      - LANGFUSE_INIT_USER_NAME=${LANGFUSE_INIT_USER_NAME:-}
+      - LANGFUSE_INIT_USER_PASSWORD=${LANGFUSE_INIT_USER_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ===========================================================================
+  # Langfuse Worker - Async Processing
+  # ===========================================================================
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:3
+    container_name: langfuse-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - langfuse-network
+    environment:
+      # Core Configuration
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - SALT=${SALT}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      
+      # Database
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # ClickHouse Analytics
+      - CLICKHOUSE_MIGRATION_URL=${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
+      - CLICKHOUSE_URL=${CLICKHOUSE_URL:-http://clickhouse:8123}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+      - CLICKHOUSE_CLUSTER_ENABLED=${CLICKHOUSE_CLUSTER_ENABLED:-false}
+      
+      # Redis
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_AUTH=${REDIS_AUTH}
+      - REDIS_TLS_ENABLED=${REDIS_TLS_ENABLED:-false}
+      
+      # S3/MinIO Event Storage
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=${LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID:-minio}
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=${LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY}
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://minio:9000}
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE:-true}
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
+      
+      # S3/MinIO Media Storage
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=${LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID:-minio}
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=${LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://minio:9000}
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=${LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE:-true}
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
+      
+      # Batch Export (optional)
+      - LANGFUSE_S3_BATCH_EXPORT_ENABLED=${LANGFUSE_S3_BATCH_EXPORT_ENABLED:-false}
+      - LANGFUSE_S3_BATCH_EXPORT_BUCKET=${LANGFUSE_S3_BATCH_EXPORT_BUCKET:-langfuse}
+      - LANGFUSE_S3_BATCH_EXPORT_PREFIX=${LANGFUSE_S3_BATCH_EXPORT_PREFIX:-exports/}
+      - LANGFUSE_S3_BATCH_EXPORT_REGION=${LANGFUSE_S3_BATCH_EXPORT_REGION:-auto}
+      - LANGFUSE_S3_BATCH_EXPORT_ENDPOINT=${LANGFUSE_S3_BATCH_EXPORT_ENDPOINT:-http://minio:9000}
+      - LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT=${LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT:-http://localhost:9090}
+      - LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID=${LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID:-minio}
+      - LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY=${LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY}
+      - LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE=${LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE:-true}
+      
+      # Performance Tuning
+      - LANGFUSE_INGESTION_QUEUE_DELAY_MS=${LANGFUSE_INGESTION_QUEUE_DELAY_MS:-}
+      - LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS=${LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS:-}
+      
+      # Optional Features
+      - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-true}
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+      
+      # Email (optional)
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-}
+      - SMTP_CONNECTION_URL=${SMTP_CONNECTION_URL:-}
+
+  # ===========================================================================
+  # PostgreSQL - Transactional Database
+  # ===========================================================================
+  postgres:
+    image: docker.io/postgres:${POSTGRES_VERSION:-17}
+    container_name: langfuse-postgres
+    restart: unless-stopped
+    networks:
+      - langfuse-network
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - TZ=UTC
+      - PGTZ=UTC
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ===========================================================================
+  # ClickHouse - Analytics Database for Traces
+  # ===========================================================================
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:latest
+    container_name: langfuse-clickhouse
+    restart: unless-stopped
+    user: "101:101"
+    networks:
+      - langfuse-network
+    environment:
+      - CLICKHOUSE_DB=default
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-clickhouse}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ===========================================================================
+  # Redis - Cache and Queue
+  # ===========================================================================
+  redis:
+    image: docker.io/redis:7-alpine
+    container_name: langfuse-redis
+    restart: unless-stopped
+    networks:
+      - langfuse-network
+    command: >
+      --requirepass ${REDIS_AUTH}
+      --maxmemory-policy noeviction
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ===========================================================================
+  # MinIO - S3-Compatible Object Storage
+  # ===========================================================================
+  minio:
+    image: docker.io/minio/minio:latest
+    container_name: langfuse-minio
+    restart: unless-stopped
+    networks:
+      - langfuse-network
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minio}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - langfuse_minio_data:/data
+    ports:
+      - "9090:9000"
+      - "127.0.0.1:9091:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ===========================================================================
+  # MinIO Bucket Creation (one-time init)
+  # ===========================================================================
+  minio-createbucket:
+    image: docker.io/minio/mc:latest
+    container_name: langfuse-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - langfuse-network
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 ${MINIO_ROOT_USER:-minio} ${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc mb myminio/${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse} --ignore-existing;
+      /usr/bin/mc policy set public myminio/${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse};
+      exit 0;
+      "
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  langfuse-network:
+    driver: bridge
+    internal: false
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  langfuse_postgres_data:
+    driver: local
+  langfuse_clickhouse_data:
+    driver: local
+  langfuse_clickhouse_logs:
+    driver: local
+  langfuse_minio_data:
+    driver: local
+  langfuse_redis_data:
+    driver: local

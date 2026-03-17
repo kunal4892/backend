@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "allowJs": true,
     "lib": ["deno.window"],
     "strict": true
   },
+  "nodeModulesDir": "auto",
   "fmt": {
     "useTabs": false,
     "lineWidth": 80,
@@ -20,8 +20,13 @@
     "dev": "supabase functions serve",
     "deploy": "supabase functions deploy",
     "logs": "supabase functions logs",
-    "test": "deno test --allow-net --allow-env",
+    "test": "deno test --allow-net --allow-env supabase/functions/",
     "format": "deno fmt",
     "lint": "deno lint"
+  },
+  "imports": {
+    "langchain/": "npm:langchain@latest/",
+    "@langchain/community/": "npm:@langchain/community@latest/",
+    "@langchain/core/": "npm:@langchain/core@latest/"
   }
 }

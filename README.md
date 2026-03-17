@@ -216,6 +216,142 @@ Use Supabase Dashboard to monitor:
 4. Test thoroughly
 5. Submit a pull request
 
+## 📊 LLM Observability with Langfuse
+
+This project includes a complete self-hosted [Langfuse](https://langfuse.com) setup for 100% free LLM observability and tracing.
+
+### Why Langfuse?
+
+- **100% Free Self-Hosted**: No usage limits, no paid tiers, completely open source
+- **Full LLM Observability**: Traces, metrics, evaluations, and prompt management
+- **Drop-in Alternative**: Easy migration path from LangSmith, Weights & Biases, etc.
+- **Production Ready**: Battle-tested at scale with enterprise features
+
+### Quick Start
+
+```bash
+# One-command setup (generates secure passwords automatically)
+./langfuse-setup.sh
+
+# Or quick non-interactive mode
+./langfuse-setup.sh --quick
+```
+
+Access Langfuse at `http://localhost:3000` after setup completes.
+
+### Resource Requirements
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| CPU      | 2 cores | 4 cores     |
+| RAM      | 8 GB    | 16 GB       |
+| Storage  | 20 GB   | 50 GB+      |
+
+### Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Langfuse Web   │────▶│   PostgreSQL    │     │    ClickHouse   │
+│   (Port 3000)   │     │  (Transactional)│     │   (Analytics)   │
+└────────┬────────┘     └─────────────────┘     └─────────────────┘
+         │
+         │            ┌─────────────────┐     ┌─────────────────┐
+         └───────────▶│     Redis       │     │     MinIO       │
+                      │  (Cache/Queue)  │     │  (S3 Storage)   │
+                      └─────────────────┘     └─────────────────┘
+```
+
+### Services Included
+
+| Service | Purpose | Port |
+|---------|---------|------|
+| `langfuse-web` | UI and API server | 3000 |
+| `langfuse-worker` | Async processing | Internal |
+| `postgres` | Transactional database | Internal |
+| `clickhouse` | Analytics for traces | Internal |
+| `redis` | Cache and queue | Internal |
+| `minio` | S3-compatible storage | 9090, 9091 |
+
+### Configuration
+
+```bash
+# Copy and customize environment
+cp .env.langfuse.example .env.langfuse
+
+# Edit configuration
+nano .env.langfuse
+
+# Start services
+docker compose -f docker-compose.langfuse.yml up -d
+```
+
+### Integration Example
+
+**Python:**
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse(
+    public_key="pk-...",
+    secret_key="sk-...",
+    host="http://localhost:3000"
+)
+
+# Automatic tracing
+@langfuse.observe()
+def my_llm_function():
+    return openai.chat.completions.create(...)
+```
+
+**JavaScript/TypeScript:**
+```typescript
+import { Langfuse } from 'langfuse';
+
+const langfuse = new Langfuse({
+    publicKey: 'pk-...',
+    secretKey: 'sk-...',
+    baseUrl: 'http://localhost:3000'
+});
+
+// Trace your LLM calls
+const trace = langfuse.trace({ name: 'my-trace' });
+```
+
+### Useful Commands
+
+```bash
+# View logs
+docker compose -f docker-compose.langfuse.yml logs -f
+
+# Stop services
+docker compose -f docker-compose.langfuse.yml down
+
+# Update to latest version
+docker compose -f docker-compose.langfuse.yml pull
+docker compose -f docker-compose.langfuse.yml up -d
+
+# Backup data
+docker run --rm -v langfuse_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/langfuse-backup.tar.gz /data
+```
+
+### Cloud Migration
+
+To migrate from self-hosted to Langfuse Cloud:
+1. Export data using batch export feature
+2. Sign up at [cloud.langfuse.com](https://cloud.langfuse.com)
+3. Import via API
+4. Update application endpoints
+
+See [full migration guide](https://langfuse.com/docs/deployment/cloud-migration).
+
+### Documentation
+
+- [Langfuse Docs](https://langfuse.com/docs)
+- [SDK Reference](https://langfuse.com/docs/sdk)
+- [Self-Host Guide](https://langfuse.com/docs/deployment/self-host)
+
+---
+
 ## 📄 License
 
 MIT License - see LICENSE file for details
