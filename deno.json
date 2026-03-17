@@ -23,5 +23,10 @@
     "test": "deno test --allow-net --allow-env",
     "format": "deno fmt",
     "lint": "deno lint"
+  },
+  "imports": {
+    "langchain/": "npm:langchain@latest/",
+    "@langchain/community/": "npm:@langchain/community@latest/",
+    "@langchain/core/": "npm:@langchain/core@latest/"
   }
 }
